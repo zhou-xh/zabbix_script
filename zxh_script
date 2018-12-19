@@ -1,0 +1,100 @@
+#!/bin/bash 
+#该脚本为zabix脚本,功能包括:1、监控多网卡进出流量；2、监控TCP状态情况；3、监控异常连接IP；4、监控磁盘读写；5、监控Nginx状态
+#【参数一】必填，表示功能，参数有:net_count(监控多网卡进出流量)、tcp_status(监控TCP状态情况)、ip_check(监控异常连接IP)、disk_status(监控磁盘读写)、nginx_status(监控Nginx状态)
+#【参数二】可选，表示功能参数
+#【参数三】可选，表示功能参数
+#【参数四】可选，表示功能参数
+cd $(cd `dirname $0`; pwd)
+
+
+#监控多网卡进出流量
+function net_count { 
+into(){ 
+	dev_namelist=`cat /proc/net/dev|grep -v lo:|grep -v Receive|grep -v bytes|awk -F : '{print $1}'`
+	while read line
+    do
+        traffic=`./zabbix_agentd -t "net.if.in[${line}]"|awk -F \| '{print $2}'|awk -F \] '{print $1}'`
+        let traffic_count=${traffic_count}+${traffic}
+    done <<< "$dev_namelist"
+    echo $traffic_count
+} 
+out() { 
+    dev_namelist=`cat /proc/net/dev|grep -v lo:|grep -v Receive|grep -v bytes|awk -F : '{print $1}'`
+    while read line
+    do
+        traffic=`./zabbix_agentd -t "net.if.out[${line}]"|awk -F \| '{print $2}'|awk -F \] '{print $1}'`
+        let traffic_count=${traffic_count}+${traffic}
+    done <<< "$dev_namelist"
+    echo $traffic_count
+} 
+$1
+} 
+
+#监控TCP状态情况
+function tcp_status {
+
+SYNRECV() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'SYN-RECV' | awk '{print $2}'
+} 
+ESTAB() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'ESTAB' | awk '{print $2}'
+} 
+FINWAIT1() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'FIN-WAIT-1' | awk '{print $2}'
+} 
+FINWAIT2() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'FIN-WAIT-2' | awk '{print $2}'
+} 
+TIMEWAIT() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'TIME-WAIT' | awk '{print $2}'
+} 
+LASTACK() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'LAST-ACK' | awk '{print $2}'
+} 
+LISTEN() { 
+	ss -ant | awk '{++s[$1]} END {for(k in s) print k,s[k]}' | grep 'LISTEN' | awk '{print $2}'
+} 
+$1
+}
+
+#监控异常连接IP
+function ip_check {
+white_list="+$1+"
+iplist=`w|tail -n +3`
+now_ipcount=`echo "$iplist"|grep pts|wc -l`
+if [[ $now_ipcount -gt 0 ]]
+then
+now_iplist=`echo "$iplist"|awk '{print $3}'|sort|uniq|grep -v "-"`
+while read line 
+do
+        result=`echo "$white_list"|grep "+${line}+"`
+        if [[ -z $result ]]
+        then
+                ip_count="${ip_counte}${line},"
+        fi
+done <<< "$now_iplist"
+fi
+if [[ -z $ip_count ]]
+then
+        echo "正常"
+else
+        echo "异常:${ip_count%?}"
+fi
+}
+
+#监控磁盘读写
+function disk_status {
+#idle小于70% IO压力就较大了,一般读取速度有较多的wait,表示存在CPU瓶颈
+idle() { 
+	echo `iostat -c 1 1|tail -n 2|head -n 1|awk '{print $6}'`
+}
+
+#iowait 的值过高，表示硬盘存在I/O瓶颈
+iowait() {
+        echo `iostat -c 1 1|tail -n 2|head -n 1|awk '{print $4}'`
+}
+
+$1
+}
+
+$1 $2 $3 $4

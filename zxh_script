@@ -1,4 +1,6 @@
 #!/bin/bash 
+#version=1.0
+#date=2018-12-20
 #该脚本为zabix脚本,功能包括:1、监控多网卡进出流量；2、监控TCP状态情况；3、监控异常连接IP；4、监控磁盘读写；5、监控Nginx状态
 #【参数一】必填，表示功能，参数有:net_count(监控多网卡进出流量)、tcp_status(监控TCP状态情况)、ip_check(监控异常连接IP)、disk_status(监控磁盘读写)、nginx_status(监控Nginx状态)
 #【参数二】可选，表示功能参数
